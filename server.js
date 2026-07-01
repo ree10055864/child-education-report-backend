@@ -26,13 +26,14 @@ app.post("/generate-report", async (req, res, next) => {
 
     console.log("[generate-report] received:", payload);
 
-    await appendReport(payload);
+    const saved = await appendReportSafely(payload);
 
     res.json({
       success: true,
       message: "报告请求已接收",
       record_id: payload.record_id,
       report_id: payload.report_id,
+      saved,
       report_url: "https://example.com/report/demo",
     });
   } catch (error) {
@@ -47,6 +48,16 @@ app.use((err, req, res, next) => {
     message: "服务器内部错误",
   });
 });
+
+async function appendReportSafely(payload) {
+  try {
+    await appendReport(payload);
+    return true;
+  } catch (error) {
+    console.error("[reports] failed to save reports.json:", error);
+    return false;
+  }
+}
 
 async function appendReport(payload) {
   const reports = await readReports();
@@ -66,6 +77,11 @@ async function readReports() {
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     if (error.code === "ENOENT") {
+      return [];
+    }
+
+    if (error instanceof SyntaxError) {
+      console.error("[reports] reports.json is not valid JSON, resetting file.");
       return [];
     }
 
