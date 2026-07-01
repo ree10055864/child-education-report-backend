@@ -31,6 +31,8 @@ app.post("/generate-report", async (req, res, next) => {
     res.json({
       success: true,
       message: "报告请求已接收",
+      record_id: payload.record_id,
+      report_id: payload.report_id,
       report_url: "https://example.com/report/demo",
     });
   } catch (error) {

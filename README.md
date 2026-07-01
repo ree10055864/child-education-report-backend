@@ -58,6 +58,8 @@ curl -X POST http://localhost:3000/generate-report \
 {
   "success": true,
   "message": "报告请求已接收",
+  "record_id": "rec_demo_001",
+  "report_id": "RPT-20260630-001",
   "report_url": "https://example.com/report/demo"
 }
 ```
@@ -183,6 +185,8 @@ curl -X POST https://your-cloud-domain.com/generate-report \
 {
   "success": true,
   "message": "报告请求已接收",
+  "record_id": "rec_demo_001",
+  "report_id": "RPT-20260701-001",
   "report_url": "https://example.com/report/demo"
 }
 ```
