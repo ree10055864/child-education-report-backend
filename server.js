@@ -144,6 +144,8 @@ async function runCozeWorkflow(payload) {
 function buildCozeHeaders(token) {
   return {
     Authorization: `Bearer ${token}`,
+    "Api-Token": token,
+    "X-API-Token": token,
     "Content-Type": "application/json",
   };
 }
