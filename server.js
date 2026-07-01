@@ -111,14 +111,15 @@ async function generateReportWithCoze(payload) {
 
 async function runCozeWorkflow(payload) {
   const token = process.env.COZE_API_TOKEN;
-  const endpoint = process.env.COZE_WORKFLOW_ENDPOINT;
+  const workflowId = getCozeWorkflowId();
+  const endpoint = getCozeWorkflowEndpoint();
 
   if (!token) {
     throw new Error("缺少 COZE_API_TOKEN 环境变量");
   }
 
-  if (!endpoint) {
-    throw new Error("缺少 COZE_WORKFLOW_ENDPOINT 环境变量");
+  if (!workflowId) {
+    throw new Error("缺少 COZE_WORKFLOW_ID 环境变量");
   }
 
   const response = await fetch(endpoint, {
@@ -128,7 +129,8 @@ async function runCozeWorkflow(payload) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      input: {
+      workflow_id: workflowId,
+      parameters: {
         record_id: payload.record_id,
         name: payload.name,
         age: normalizeAge(payload.age),
@@ -152,6 +154,26 @@ async function runCozeWorkflow(payload) {
   }
 
   return reportText;
+}
+
+function getCozeWorkflowEndpoint() {
+  const endpoint = process.env.COZE_WORKFLOW_ENDPOINT || "";
+
+  if (endpoint.includes("/v1/workflows/")) {
+    return "https://api.coze.cn/v1/workflow/run";
+  }
+
+  return endpoint || "https://api.coze.cn/v1/workflow/run";
+}
+
+function getCozeWorkflowId() {
+  if (process.env.COZE_WORKFLOW_ID) {
+    return process.env.COZE_WORKFLOW_ID;
+  }
+
+  const endpoint = process.env.COZE_WORKFLOW_ENDPOINT || "";
+  const match = endpoint.match(/\/workflows\/([^/]+)\/run/);
+  return match ? match[1] : "";
 }
 
 function normalizeAge(age) {
