@@ -57,10 +57,16 @@ curl -X POST http://localhost:3000/generate-report \
 ```json
 {
   "success": true,
-  "message": "报告请求已接收",
+  "message": "模拟报告已生成",
   "record_id": "rec_demo_001",
   "report_id": "RPT-20260630-001",
-  "report_url": "https://example.com/report/demo"
+  "report_status": "已生成",
+  "report_url": "https://example.com/report/demo",
+  "generated_at": "2026-07-01T05:43:58.000Z",
+  "generation_method": "mock",
+  "error_reason": "",
+  "report_text": "【模拟报告】小明的4-6岁儿童教育规划测评报告\n...",
+  "saved": true
 }
 ```
 
@@ -184,10 +190,16 @@ curl -X POST https://your-cloud-domain.com/generate-report \
 ```json
 {
   "success": true,
-  "message": "报告请求已接收",
+  "message": "模拟报告已生成",
   "record_id": "rec_demo_001",
   "report_id": "RPT-20260701-001",
-  "report_url": "https://example.com/report/demo"
+  "report_status": "已生成",
+  "report_url": "https://example.com/report/demo",
+  "generated_at": "2026-07-01T05:43:58.000Z",
+  "generation_method": "mock",
+  "error_reason": "",
+  "report_text": "【模拟报告】小明的4-6岁儿童教育规划测评报告\n...",
+  "saved": true
 }
 ```
 
@@ -219,6 +231,52 @@ Content-Type: application/json
 ```
 
 其中 `{{记录ID}}`、`{{姓名}}` 等字段需要替换为飞书自动化里可选择的实际字段变量。
+
+### 飞书自动化 mock 回写配置
+
+当前阶段还没有接入 AI，接口会返回一份模拟报告结果。可以先在飞书自动化中把“回写记录”流程跑通。
+
+建议自动化步骤：
+
+1. 触发条件：`报告状态` 变为 `待生成`。
+2. 动作一：发送 HTTP 请求到 `/generate-report`。
+3. 动作二：更新触发的这条记录。
+
+HTTP 请求成功后，响应 body 示例：
+
+```json
+{
+  "success": true,
+  "message": "模拟报告已生成",
+  "record_id": "rec_demo_001",
+  "report_id": "RPT-20260701-001",
+  "report_status": "已生成",
+  "report_url": "https://example.com/report/demo",
+  "generated_at": "2026-07-01T05:43:58.000Z",
+  "generation_method": "mock",
+  "error_reason": "",
+  "report_text": "【模拟报告】小明的4-6岁儿童教育规划测评报告\n...",
+  "saved": true
+}
+```
+
+更新记录时，字段建议这样映射：
+
+```text
+报告状态   -> HTTP 响应 body.report_status
+报告链接   -> HTTP 响应 body.report_url
+生成时间   -> HTTP 响应 body.generated_at
+生成方式   -> HTTP 响应 body.generation_method
+错误原因   -> HTTP 响应 body.error_reason
+```
+
+如果表格里有“报告文本”字段，也可以临时映射：
+
+```text
+报告文本   -> HTTP 响应 body.report_text
+```
+
+这一步跑通后，后续接入 Coze Workflow 时，只需要把 `generation_method` 从 `mock` 改成 `coze`，并把 `report_text` 换成 Coze 返回的正式报告内容；飞书触发和回写框架不需要重做。
 
 ## 后续扩展方向
 
