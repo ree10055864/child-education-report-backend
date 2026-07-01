@@ -278,6 +278,109 @@ HTTP 请求成功后，响应 body 示例：
 
 这一步跑通后，后续接入 Coze Workflow 时，只需要把 `generation_method` 从 `mock` 改成 `coze`，并把 `report_text` 换成 Coze 返回的正式报告内容；飞书触发和回写框架不需要重做。
 
+## 接入 Coze Workflow
+
+当前后端支持两种生成方式：
+
+```text
+REPORT_PROVIDER=mock   使用模拟报告
+REPORT_PROVIDER=coze   调用 Coze Workflow 生成报告
+```
+
+Coze Workflow 信息：
+
+```text
+Workflow ID: 7657432204359794729
+Space ID: 7641049019674230820
+API Base: https://api.coze.cn
+Workflow Endpoint: https://api.coze.cn/v1/workflows/7657432204359794729/run
+```
+
+Workflow 输入变量：
+
+```text
+record_id
+name
+age
+report_id
+report_input_text
+```
+
+Workflow 输出变量：
+
+```text
+report_text
+```
+
+### Render 环境变量
+
+在 Render 服务的 `Environment` 中添加：
+
+```text
+REPORT_PROVIDER=coze
+COZE_API_TOKEN=你的扣子PAT令牌
+COZE_WORKFLOW_ENDPOINT=https://api.coze.cn/v1/workflows/7657432204359794729/run
+```
+
+注意：`COZE_API_TOKEN` 不要写进代码，也不要上传到 GitHub。
+
+如果要切回模拟模式，把环境变量改回：
+
+```text
+REPORT_PROVIDER=mock
+```
+
+### Coze 成功时的返回
+
+接口会把 Coze 返回的 `report_text` 包装成飞书可回写的结构：
+
+```json
+{
+  "success": true,
+  "message": "报告已生成",
+  "record_id": "rec_demo_001",
+  "report_id": "RPT-20260701-001",
+  "report_status": "已完成",
+  "report_url": "https://example.com/report/demo",
+  "generated_at": "2026-07-01T05:43:58.000Z",
+  "generation_method": "coze",
+  "error_reason": "",
+  "report_text": "Coze 生成的完整 Markdown 报告",
+  "saved": true
+}
+```
+
+### Coze 失败时的返回
+
+为了让飞书仍然可以回写错误状态，Coze 调用失败时接口也会返回 JSON：
+
+```json
+{
+  "success": false,
+  "message": "报告生成失败",
+  "record_id": "rec_demo_001",
+  "report_id": "RPT-20260701-001",
+  "report_status": "失败",
+  "report_url": "",
+  "generated_at": "2026-07-01T05:43:58.000Z",
+  "generation_method": "coze",
+  "error_reason": "Coze Workflow 调用失败原因",
+  "report_text": "",
+  "saved": true
+}
+```
+
+飞书“修改记录”动作可以继续使用同一套字段映射：
+
+```text
+报告状态 -> report_status
+报告链接 -> report_url
+生成时间 -> generated_at
+生成方式 -> generation_method
+错误原因 -> error_reason
+报告文本 -> report_text
+```
+
 ## 后续扩展方向
 
 当前代码保持简单，后续可以继续加入：

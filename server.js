@@ -7,6 +7,7 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const REPORTS_FILE = path.join(__dirname, "reports.json");
+const REPORT_PROVIDER = process.env.REPORT_PROVIDER || "mock";
 
 app.use(express.json({ limit: "1mb" }));
 
@@ -28,18 +29,19 @@ app.post("/generate-report", async (req, res, next) => {
 
     const saved = await appendReportSafely(payload);
     const generatedAt = new Date().toISOString();
+    const generationResult = await generateReport(payload);
 
     res.json({
-      success: true,
-      message: "模拟报告已生成",
+      success: generationResult.success,
+      message: generationResult.message,
       record_id: payload.record_id,
       report_id: payload.report_id,
-      report_status: "已生成",
-      report_url: "https://example.com/report/demo",
+      report_status: generationResult.report_status,
+      report_url: generationResult.report_url,
       generated_at: generatedAt,
-      generation_method: "mock",
-      error_reason: "",
-      report_text: buildMockReportText(payload),
+      generation_method: generationResult.generation_method,
+      error_reason: generationResult.error_reason,
+      report_text: generationResult.report_text,
       saved,
     });
   } catch (error) {
@@ -62,6 +64,133 @@ app.use((err, req, res, next) => {
     message: "服务器内部错误",
   });
 });
+
+async function generateReport(payload) {
+  if (REPORT_PROVIDER === "coze") {
+    return generateReportWithCoze(payload);
+  }
+
+  return {
+    success: true,
+    message: "模拟报告已生成",
+    report_status: "已完成",
+    report_url: "https://example.com/report/demo",
+    generation_method: "mock",
+    error_reason: "",
+    report_text: buildMockReportText(payload),
+  };
+}
+
+async function generateReportWithCoze(payload) {
+  try {
+    const reportText = await runCozeWorkflow(payload);
+
+    return {
+      success: true,
+      message: "报告已生成",
+      report_status: "已完成",
+      report_url: "https://example.com/report/demo",
+      generation_method: "coze",
+      error_reason: "",
+      report_text: reportText,
+    };
+  } catch (error) {
+    console.error("[coze] failed to generate report:", error);
+
+    return {
+      success: false,
+      message: "报告生成失败",
+      report_status: "失败",
+      report_url: "",
+      generation_method: "coze",
+      error_reason: error.message || "Coze Workflow 调用失败",
+      report_text: "",
+    };
+  }
+}
+
+async function runCozeWorkflow(payload) {
+  const token = process.env.COZE_API_TOKEN;
+  const endpoint = process.env.COZE_WORKFLOW_ENDPOINT;
+
+  if (!token) {
+    throw new Error("缺少 COZE_API_TOKEN 环境变量");
+  }
+
+  if (!endpoint) {
+    throw new Error("缺少 COZE_WORKFLOW_ENDPOINT 环境变量");
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      input: {
+        record_id: payload.record_id,
+        name: payload.name,
+        age: normalizeAge(payload.age),
+        report_id: payload.report_id,
+        report_input_text: payload.report_input_text,
+      },
+    }),
+  });
+
+  const resultText = await response.text();
+  const result = parseJson(resultText);
+
+  if (!response.ok) {
+    throw new Error(`Coze API 返回 ${response.status}: ${resultText}`);
+  }
+
+  const reportText = extractCozeReportText(result);
+
+  if (!reportText) {
+    throw new Error(`Coze 响应中没有找到 report_text: ${resultText}`);
+  }
+
+  return reportText;
+}
+
+function normalizeAge(age) {
+  const numberAge = Number(age);
+  return Number.isFinite(numberAge) ? numberAge : age;
+}
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Coze 响应不是合法 JSON: ${text}`);
+  }
+}
+
+function extractCozeReportText(result) {
+  if (typeof result?.report_text === "string") {
+    return result.report_text;
+  }
+
+  if (typeof result?.data?.report_text === "string") {
+    return result.data.report_text;
+  }
+
+  if (typeof result?.data?.outputs?.report_text === "string") {
+    return result.data.outputs.report_text;
+  }
+
+  if (typeof result?.output?.report_text === "string") {
+    return result.output.report_text;
+  }
+
+  if (typeof result?.data === "string") {
+    const parsedData = parseJson(result.data);
+    return extractCozeReportText(parsedData);
+  }
+
+  return "";
+}
 
 function buildMockReportText(payload) {
   const name = payload.name || "孩子";
