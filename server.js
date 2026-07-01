@@ -9,10 +9,26 @@ const PORT = process.env.PORT || 3000;
 const REPORTS_FILE = path.join(__dirname, "reports.json");
 const REPORT_PROVIDER = process.env.REPORT_PROVIDER || "mock";
 
+app.set("trust proxy", true);
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/reports/:id", async (req, res, next) => {
+  try {
+    const reports = await readReports();
+    const report = findReportById(reports, req.params.id);
+
+    if (!report) {
+      return res.status(404).send(renderNotFoundPage(req.params.id));
+    }
+
+    res.send(renderReportPage(report));
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/generate-report", async (req, res, next) => {
@@ -28,9 +44,19 @@ app.post("/generate-report", async (req, res, next) => {
 
     console.log("[generate-report] received:", payload);
 
-    const saved = await appendReportSafely(payload);
     const generatedAt = new Date().toISOString();
     const generationResult = await generateReport(payload);
+    const reportUrl = generationResult.success ? buildReportUrl(req, payload) : "";
+    const reportEntry = {
+      ...payload,
+      report_status: generationResult.report_status,
+      report_url: reportUrl,
+      generated_at: generatedAt,
+      generation_method: generationResult.generation_method,
+      error_reason: generationResult.error_reason,
+      report_text: generationResult.report_text,
+    };
+    const saved = await appendReportSafely(reportEntry);
 
     res.json({
       success: generationResult.success,
@@ -39,7 +65,7 @@ app.post("/generate-report", async (req, res, next) => {
       report_id: payload.report_id,
       age_group: payload.age_group,
       report_status: generationResult.report_status,
-      report_url: generationResult.report_url,
+      report_url: reportUrl,
       generated_at: generatedAt,
       generation_method: generationResult.generation_method,
       error_reason: generationResult.error_reason,
@@ -73,14 +99,13 @@ async function generateReport(payload) {
   }
 
   return {
-    success: true,
-    message: "模拟报告已生成",
-    report_status: "已完成",
-    report_url: "https://example.com/report/demo",
-    generation_method: "mock",
-    error_reason: "",
-    report_text: buildMockReportText(payload),
-  };
+      success: true,
+      message: "模拟报告已生成",
+      report_status: "已完成",
+      generation_method: "mock",
+      error_reason: "",
+      report_text: buildMockReportText(payload),
+    };
 }
 
 async function generateReportWithCoze(payload) {
@@ -91,7 +116,6 @@ async function generateReportWithCoze(payload) {
       success: true,
       message: "报告已生成",
       report_status: "已完成",
-      report_url: "https://example.com/report/demo",
       generation_method: "coze",
       error_reason: "",
       report_text: reportText,
@@ -103,7 +127,6 @@ async function generateReportWithCoze(payload) {
       success: false,
       message: "报告生成失败",
       report_status: "失败",
-      report_url: "",
       generation_method: "coze",
       error_reason: error.message || "Coze Workflow 调用失败",
       report_text: "",
@@ -270,6 +293,292 @@ async function appendReport(payload) {
   });
 
   await fs.writeFile(REPORTS_FILE, JSON.stringify(reports, null, 2), "utf8");
+}
+
+function buildReportUrl(req, payload) {
+  const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  const reportId = encodeURIComponent(getReportKey(payload));
+  return `${baseUrl.replace(/\/$/, "")}/reports/${reportId}`;
+}
+
+function getReportKey(payload) {
+  return payload.record_id || payload.report_id || "latest";
+}
+
+function findReportById(reports, id) {
+  const decodedId = decodeURIComponent(id);
+
+  for (let index = reports.length - 1; index >= 0; index -= 1) {
+    const report = reports[index];
+
+    if (
+      report.record_id === decodedId ||
+      report.report_id === decodedId ||
+      (!report.record_id && !report.report_id && decodedId === "latest")
+    ) {
+      return report;
+    }
+  }
+
+  return null;
+}
+
+function renderReportPage(report) {
+  const title = `${report.name || "孩子"}儿童教育规划测评报告`;
+  const generatedAt = report.generated_at ? formatDate(report.generated_at) : "未记录";
+
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f4ee;
+      --paper: #fffdf8;
+      --text: #25211b;
+      --muted: #6f665b;
+      --line: #e6ded2;
+      --accent: #2f6f73;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.72;
+    }
+
+    main {
+      width: min(880px, calc(100% - 32px));
+      margin: 32px auto;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 18px 42px rgba(45, 38, 28, 0.08);
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 28px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #fffaf0;
+    }
+
+    article h1 {
+      margin: 0 0 18px;
+      color: var(--accent);
+      font-size: 30px;
+      line-height: 1.24;
+    }
+
+    article h2 {
+      margin: 30px 0 10px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      font-size: 21px;
+      line-height: 1.35;
+    }
+
+    article h3 {
+      margin: 22px 0 8px;
+      font-size: 17px;
+    }
+
+    article p {
+      margin: 8px 0;
+    }
+
+    article ol,
+    article ul {
+      padding-left: 24px;
+      margin: 8px 0;
+    }
+
+    article li {
+      margin: 6px 0;
+    }
+
+    article strong {
+      color: #1f595c;
+    }
+
+    @media (max-width: 640px) {
+      main {
+        width: 100%;
+        min-height: 100vh;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        padding: 22px;
+      }
+
+      article h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="meta">
+      <span class="pill">状态：${escapeHtml(report.report_status || "未知")}</span>
+      <span class="pill">编号：${escapeHtml(report.report_id || "未填写")}</span>
+      <span class="pill">生成方式：${escapeHtml(report.generation_method || "未知")}</span>
+      <span class="pill">生成时间：${escapeHtml(generatedAt)}</span>
+    </div>
+    <article>
+      ${renderMarkdown(report.report_text || "报告正文暂未生成。")}
+    </article>
+  </main>
+</body>
+</html>`;
+}
+
+function renderNotFoundPage(id) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>报告未找到</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f7f4ee;
+      color: #25211b;
+    }
+
+    main {
+      width: min(720px, calc(100% - 32px));
+      margin: 56px auto;
+      background: #fffdf8;
+      border: 1px solid #e6ded2;
+      border-radius: 8px;
+      padding: 28px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>报告未找到</h1>
+    <p>没有找到 ID 为 ${escapeHtml(id)} 的报告。请确认飞书自动化已经成功生成报告。</p>
+  </main>
+</body>
+</html>`;
+}
+
+function renderMarkdown(markdown) {
+  const lines = markdown.split(/\r?\n/);
+  const html = [];
+  let listType = "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      closeList();
+      continue;
+    }
+
+    if (trimmed.startsWith("### ")) {
+      closeList();
+      html.push(`<h3>${renderInline(trimmed.slice(4))}</h3>`);
+      continue;
+    }
+
+    if (trimmed.startsWith("## ")) {
+      closeList();
+      html.push(`<h2>${renderInline(trimmed.slice(3))}</h2>`);
+      continue;
+    }
+
+    if (trimmed.startsWith("# ")) {
+      closeList();
+      html.push(`<h1>${renderInline(trimmed.slice(2))}</h1>`);
+      continue;
+    }
+
+    const orderedItem = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (orderedItem) {
+      openList("ol");
+      html.push(`<li>${renderInline(orderedItem[1])}</li>`);
+      continue;
+    }
+
+    const unorderedItem = trimmed.match(/^[-*]\s+(.+)$/);
+    if (unorderedItem) {
+      openList("ul");
+      html.push(`<li>${renderInline(unorderedItem[1])}</li>`);
+      continue;
+    }
+
+    closeList();
+    html.push(`<p>${renderInline(trimmed)}</p>`);
+  }
+
+  closeList();
+  return html.join("\n");
+
+  function openList(type) {
+    if (listType === type) {
+      return;
+    }
+
+    closeList();
+    listType = type;
+    html.push(`<${type}>`);
+  }
+
+  function closeList() {
+    if (!listType) {
+      return;
+    }
+
+    html.push(`</${listType}>`);
+    listType = "";
+  }
+}
+
+function renderInline(text) {
+  return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
 }
 
 async function readReports() {

@@ -60,8 +60,8 @@ curl -X POST http://localhost:3000/generate-report \
   "message": "模拟报告已生成",
   "record_id": "rec_demo_001",
   "report_id": "RPT-20260630-001",
-  "report_status": "已生成",
-  "report_url": "https://example.com/report/demo",
+  "report_status": "已完成",
+  "report_url": "http://localhost:3000/reports/rec_demo_001",
   "generated_at": "2026-07-01T05:43:58.000Z",
   "generation_method": "mock",
   "error_reason": "",
@@ -115,7 +115,12 @@ Build Command: npm install
 Start Command: npm start
 ```
 
-5. 暂时不需要配置环境变量。
+5. 如果需要让返回的报告链接固定为 Render 域名，可以配置环境变量：
+
+```text
+PUBLIC_BASE_URL=https://your-service-name.onrender.com
+```
+
 6. 部署完成后，Render 会提供一个公网域名，格式通常类似：
 
 ```text
@@ -147,7 +152,12 @@ curl https://your-service-name.onrender.com/health
 npm start
 ```
 
-5. 暂时不需要配置环境变量。
+5. 如果需要让返回的报告链接固定为 Railway 域名，可以配置环境变量：
+
+```text
+PUBLIC_BASE_URL=https://your-service-name.up.railway.app
+```
+
 6. 部署完成后，在服务的 `Networking` 或 `Settings` 中生成公网域名。
 7. Railway 域名格式通常类似：
 
@@ -193,8 +203,8 @@ curl -X POST https://your-cloud-domain.com/generate-report \
   "message": "模拟报告已生成",
   "record_id": "rec_demo_001",
   "report_id": "RPT-20260701-001",
-  "report_status": "已生成",
-  "report_url": "https://example.com/report/demo",
+  "report_status": "已完成",
+  "report_url": "https://your-cloud-domain.com/reports/rec_demo_001",
   "generated_at": "2026-07-01T05:43:58.000Z",
   "generation_method": "mock",
   "error_reason": "",
@@ -250,8 +260,8 @@ HTTP 请求成功后，响应 body 示例：
   "message": "模拟报告已生成",
   "record_id": "rec_demo_001",
   "report_id": "RPT-20260701-001",
-  "report_status": "已生成",
-  "report_url": "https://example.com/report/demo",
+  "report_status": "已完成",
+  "report_url": "https://your-service-name.onrender.com/reports/rec_demo_001",
   "generated_at": "2026-07-01T05:43:58.000Z",
   "generation_method": "mock",
   "error_reason": "",
@@ -276,6 +286,8 @@ HTTP 请求成功后，响应 body 示例：
 报告文本   -> HTTP 响应 body.report_text
 ```
 
+现在接口会同时生成一个简单的报告页面。飞书里的“报告链接”字段应该映射 `body.report_url`，打开后会看到排版后的报告正文。
+
 这一步跑通后，后续接入 Coze Workflow 时，只需要把 `generation_method` 从 `mock` 改成 `coze`，并把 `report_text` 换成 Coze 返回的正式报告内容；飞书触发和回写框架不需要重做。
 
 ## 接入 Coze Workflow
@@ -293,7 +305,7 @@ Coze Workflow 信息：
 Workflow ID: 7657432204359794729
 Space ID: 7641049019674230820
 API Base: https://api.coze.cn
-Workflow Endpoint: https://api.coze.cn/v1/workflows/7657432204359794729/run
+Workflow Endpoint: https://ys6ct3nrdq.coze.site/run
 ```
 
 Workflow 输入变量：
@@ -319,7 +331,8 @@ report_text
 ```text
 REPORT_PROVIDER=coze
 COZE_API_TOKEN=你的扣子PAT令牌
-COZE_WORKFLOW_ENDPOINT=https://api.coze.cn/v1/workflows/7657432204359794729/run
+COZE_WORKFLOW_ENDPOINT=https://ys6ct3nrdq.coze.site/run
+PUBLIC_BASE_URL=https://child-education-report-backend.onrender.com
 ```
 
 注意：`COZE_API_TOKEN` 不要写进代码，也不要上传到 GitHub。
@@ -341,7 +354,7 @@ REPORT_PROVIDER=mock
   "record_id": "rec_demo_001",
   "report_id": "RPT-20260701-001",
   "report_status": "已完成",
-  "report_url": "https://example.com/report/demo",
+  "report_url": "https://child-education-report-backend.onrender.com/reports/rec_demo_001",
   "generated_at": "2026-07-01T05:43:58.000Z",
   "generation_method": "coze",
   "error_reason": "",
@@ -386,6 +399,6 @@ REPORT_PROVIDER=mock
 当前代码保持简单，后续可以继续加入：
 
 - AI 生成报告：在 `/generate-report` 中调用大模型，根据 `report_input_text` 生成结构化报告内容。
-- HTML 报告页面：生成静态或动态 HTML 页面，并把真实报告链接返回给飞书。
+- HTML 报告页面：当前已提供 `/reports/:id` 简易页面，后续可以继续美化排版、增加打印或导出 PDF。
 - 回写飞书多维表格：调用飞书开放平台接口，把报告状态、报告链接、错误原因等写回原记录。
 - 错误日志：把接口异常、AI 调用失败、飞书回写失败等日志保存到单独日志文件或日志服务。
