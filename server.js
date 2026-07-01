@@ -113,33 +113,16 @@ async function generateReportWithCoze(payload) {
 
 async function runCozeWorkflow(payload) {
   const token = process.env.COZE_API_TOKEN;
-  const workflowId = getCozeWorkflowId();
   const endpoint = getCozeWorkflowEndpoint();
 
   if (!token) {
     throw new Error("缺少 COZE_API_TOKEN 环境变量");
   }
 
-  if (!workflowId) {
-    throw new Error("缺少 COZE_WORKFLOW_ID 环境变量");
-  }
-
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      workflow_id: workflowId,
-      parameters: {
-        record_id: payload.record_id,
-        name: payload.name,
-        age: normalizeAge(payload.age),
-        report_id: payload.report_id,
-        report_input_text: payload.report_input_text,
-      },
-    }),
+    headers: buildCozeHeaders(token),
+    body: JSON.stringify(buildCozeRequestBody(endpoint, payload)),
   });
 
   const resultText = await response.text();
@@ -156,6 +139,38 @@ async function runCozeWorkflow(payload) {
   }
 
   return reportText;
+}
+
+function buildCozeHeaders(token) {
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+}
+
+function buildCozeRequestBody(endpoint, payload) {
+  const input = {
+    record_id: payload.record_id,
+    name: payload.name,
+    age: normalizeAge(payload.age),
+    report_id: payload.report_id,
+    report_input_text: payload.report_input_text,
+  };
+
+  if (endpoint.includes("coze.site/run")) {
+    return input;
+  }
+
+  const workflowId = getCozeWorkflowId();
+
+  if (!workflowId) {
+    throw new Error("缺少 COZE_WORKFLOW_ID 环境变量");
+  }
+
+  return {
+    workflow_id: workflowId,
+    parameters: input,
+  };
 }
 
 function getCozeWorkflowEndpoint() {
