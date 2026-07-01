@@ -21,6 +21,7 @@ app.post("/generate-report", async (req, res, next) => {
       record_id: req.body.record_id || "",
       name: req.body.name || "",
       age: req.body.age || "",
+      age_group: req.body.age_group || "4-6",
       report_id: req.body.report_id || "",
       report_input_text: req.body.report_input_text || "",
     };
@@ -36,6 +37,7 @@ app.post("/generate-report", async (req, res, next) => {
       message: generationResult.message,
       record_id: payload.record_id,
       report_id: payload.report_id,
+      age_group: payload.age_group,
       report_status: generationResult.report_status,
       report_url: generationResult.report_url,
       generated_at: generatedAt,
